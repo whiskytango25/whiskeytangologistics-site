@@ -6,4 +6,4 @@ Cloudflare Pages site for Whiskey Tango Logistics.
 - Legal: https://whiskeytangologistics.com/legal
 - Store (Lemon Squeezy, different host): https://fleetlog.whiskeytangologistics.com/
 
-A push to `main` publishes. See [DEPLOY.md](DEPLOY.md).
+`main` is the site. It publishes when the existing Pages project is connected to this repo. See [DEPLOY.md](DEPLOY.md). Do not upload a folder by hand.
