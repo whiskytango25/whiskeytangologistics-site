@@ -1,28 +1,15 @@
 # Deploy — whiskeytangologistics.com
 
-This folder is the Cloudflare Pages project for the company site.
+Push to `main`. That is the deploy.
 
-## What changed 2026-09-30
+The Cloudflare token already lives on `whiskytango25/wti-console` as
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. A workflow there
+checks this repo out and runs `build.sh` then `scripts/publish.sh`.
+It publishes only the Pages project that already has this domain, so a
+push cannot create a second project or drop the custom domain.
 
-- Footer Legal now points at `/legal` on this host, not the Lemon Squeezy custom domain.
-- `legal/index.html` is in the tree so `/legal` stops 404ing.
-- `_redirects` sends `/legal.html` to `/legal`.
+`build.sh` copies the public files into `dist/`. Do not upload a folder
+by hand. The last hand upload left out `index.html`, and the homepage 404ed.
 
-## Publish (pick one)
-
-### A. Direct upload (fastest)
-
-Cloudflare Dashboard → Pages → the project bound to `whiskeytangologistics.com` → Create deployment → Upload this whole folder (`index.html`, `legal/`, `_redirects`, `_headers`, `robots.txt`).
-
-### B. Git (durable)
-
-Repo: `whiskytango25/whiskeytangologistics-site`
-Connect that repo to the existing Pages project, production branch `main`. Future edits ship on push.
-
-Do not upload `site/landing/` alone again. That is how legal went missing.
-
-## What changed 2026-10-01
-
-- `/` was 404 in production because the last upload did not include `index.html`. Upload this whole folder, not `legal/` alone.
-- Header on the home page links to `/legal`.
-- Contact is a form (name, email, phone, topic, message) on the home page and on `/legal`. First send asks FormSubmit to confirm `info@whiskeytangologistics.com`.
+First contact-form send still has to be confirmed by FormSubmit at
+info@whiskeytangologistics.com. That is once, not a deploy step.

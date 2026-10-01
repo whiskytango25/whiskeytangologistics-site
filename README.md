@@ -1,9 +1,9 @@
 # whiskeytangologistics.com
 
-Cloudflare Pages project for the Whiskey Tango Logistics company site.
+Cloudflare Pages site for Whiskey Tango Logistics.
 
-Production domain: https://whiskeytangologistics.com/
-Legal: https://whiskeytangologistics.com/legal
-Store (Lemon Squeezy, different host): https://fleetlog.whiskeytangologistics.com/
+- Production: https://whiskeytangologistics.com/
+- Legal: https://whiskeytangologistics.com/legal
+- Store (Lemon Squeezy, different host): https://fleetlog.whiskeytangologistics.com/
 
-Connect this repo to the existing Pages project. Production branch: main.
+A push to `main` publishes. See [DEPLOY.md](DEPLOY.md).
