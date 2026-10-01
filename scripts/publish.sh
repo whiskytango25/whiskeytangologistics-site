@@ -96,63 +96,87 @@ def get_results(path):
         page += 1
     return 200, items, ""
 
-code, projects, message = get_results(f"/accounts/{account}/pages/projects")
-if code != 200:
-    print(f"Cloudflare project list returned HTTP {code}: {message}", file=sys.stderr)
-    sys.exit(1)
-
-print(f"Pages projects on this account: {len(projects)}", file=sys.stderr)
-pages_hosts = {}  # pages.dev hostname -> project name
-matches = []
-
-for project in projects:
-    name = project.get("name") or ""
-    branch = project.get("production_branch") or "main"
-    hosts = set()
-    collect(project.get("domains"), hosts)
-    collect(project.get("canonical_deployment"), hosts)
-    collect(project.get("latest_deployment"), hosts)
-    sub = (project.get("subdomain") or "").strip().lower()
-    if sub:
-        hosts.add(sub if sub.endswith(".pages.dev") else sub + ".pages.dev")
-
-    dcode, domains, dmessage = get_results(
-        f"/accounts/{account}/pages/projects/{urllib.parse.quote(name)}/domains"
+acode, accounts, amessage = get_results("/accounts")
+if acode != 200 or not accounts:
+    print(
+        f"Account list HTTP {acode}: {amessage}. Using the configured account only.",
+        file=sys.stderr,
     )
-    if dcode == 200:
-        collect(domains, hosts)
-        domain_note = "domains ok"
-    else:
-        domain_note = f"domains HTTP {dcode}: {dmessage}"
+    accounts = [{"id": account, "name": "configured"}]
+else:
+    print("Accounts this token can see:", file=sys.stderr)
+    for item in accounts:
+        print(f"  {item.get('name')}  {item.get('id')}", file=sys.stderr)
 
-    for host in list(hosts):
-        if host.endswith(".pages.dev"):
-            pages_hosts.setdefault(host, name)
+pages_hosts = {}  # pages.dev hostname -> (project, branch, account id)
+matches = []
+any_projects = False
 
-    shown = ", ".join(sorted(hosts)) if hosts else "(none)"
-    print(f"{name}  branch={branch}  {domain_note}  hosts={shown}", file=sys.stderr)
+for acct in accounts:
+    acct_id = acct.get("id") or ""
+    label = acct.get("name") or acct_id
+    pcode, projects, pmessage = get_results(f"/accounts/{acct_id}/pages/projects")
+    if pcode != 200:
+        print(f"{label}: project list HTTP {pcode}: {pmessage}", file=sys.stderr)
+        continue
+    any_projects = True
+    print(f"{label}: {len(projects)} Pages projects", file=sys.stderr)
+    for project in projects:
+        name = project.get("name") or ""
+        branch = project.get("production_branch") or "main"
+        hosts = set()
+        collect(project.get("domains"), hosts)
+        collect(project.get("canonical_deployment"), hosts)
+        collect(project.get("latest_deployment"), hosts)
+        sub = (project.get("subdomain") or "").strip().lower()
+        if sub:
+            hosts.add(sub if sub.endswith(".pages.dev") else sub + ".pages.dev")
 
-    for host in hosts:
-        if host in WANT or host.endswith("." + APEX):
-            rank = 0 if host == APEX else 1
-            matches.append((rank, name, branch, host))
+        dcode, domains, dmessage = get_results(
+            f"/accounts/{acct_id}/pages/projects/{urllib.parse.quote(name)}/domains"
+        )
+        if dcode == 200:
+            collect(domains, hosts)
+            domain_note = "domains ok"
+        else:
+            domain_note = f"domains HTTP {dcode}: {dmessage}"
+
+        for host in list(hosts):
+            if host.endswith(".pages.dev"):
+                pages_hosts.setdefault(host, (name, branch, acct_id))
+
+        shown = ", ".join(sorted(hosts)) if hosts else "(none)"
+        print(f"  {name}  branch={branch}  {domain_note}  hosts={shown}", file=sys.stderr)
+
+        for host in hosts:
+            if host in WANT or host.endswith("." + APEX):
+                rank = 0 if host == APEX else 1
+                matches.append((rank, name, branch, host, acct_id))
+
+if not any_projects and not matches:
+    print("No Pages projects were visible to this token.", file=sys.stderr)
+    sys.exit(1)
 
 chosen = None
 if matches:
     matches.sort()
-    _, name, branch, host = matches[0]
-    print(f"Matched {host} on project {name} (production branch {branch})", file=sys.stderr)
-    chosen = (name, branch)
+    _, name, branch, host, acct_id = matches[0]
+    print(
+        f"Matched {host} on project {name} (account {acct_id}, production branch {branch})",
+        file=sys.stderr,
+    )
+    chosen = (name, branch, acct_id)
 else:
     print("No Pages custom domain is whiskeytangologistics.com. Checking DNS.", file=sys.stderr)
     zcode, zones, zmessage = get_results("/zones?name=" + APEX)
     if zcode != 200:
         print(f"Zone lookup HTTP {zcode}: {zmessage}", file=sys.stderr)
     elif not zones:
-        print("This token's account has no zone named whiskeytangologistics.com.", file=sys.stderr)
+        print("This token cannot see a zone named whiskeytangologistics.com.", file=sys.stderr)
     else:
         zid = zones[0].get("id")
-        print(f"Zone is on this account. DNS records:", file=sys.stderr)
+        zacct = zones[0].get("account", {}).get("id") or account
+        print("Zone is visible to this token. DNS records:", file=sys.stderr)
         for host in (APEX, "www." + APEX):
             rcode, recs, rmessage = get_results(f"/zones/{zid}/dns_records?name={host}")
             if rcode != 200:
@@ -168,42 +192,31 @@ else:
                 )
                 target = pages_hosts.get(content)
                 if target and chosen is None:
-                    branch = "main"
-                    for project in projects:
-                        if project.get("name") == target:
-                            branch = project.get("production_branch") or "main"
+                    print(f"DNS for {host} points at Pages project {target[0]}. Using that.", file=sys.stderr)
+                    chosen = target
+                elif content.endswith(".pages.dev") and chosen is None:
                     print(
-                        f"DNS for {host} points at Pages project {target}. Using that.",
+                        f"DNS points at {content}, which is not one of this token's Pages projects.",
                         file=sys.stderr,
                     )
-                    chosen = (target, branch)
-
-    wcode, wdomains, wmessage = get_results(f"/accounts/{account}/workers/domains")
-    if wcode != 200:
-        print(f"Workers domains HTTP {wcode}: {wmessage}", file=sys.stderr)
-    else:
-        for item in wdomains:
-            host = (item.get("hostname") or "").lower()
-            if host in WANT or host.endswith("." + APEX):
-                print(
-                    f"Workers domain {host} is service {item.get('service')} — not deploying a Pages site onto a Worker.",
-                    file=sys.stderr,
-                )
 
 if not chosen:
     print(
-        "Stopped. No project on this Cloudflare account owns whiskeytangologistics.com. Not creating one.",
+        "Stopped. No project this token can see owns whiskeytangologistics.com. Not creating one.",
         file=sys.stderr,
     )
     sys.exit(1)
 
 with open(out_path, "w") as handle:
-    handle.write(chosen[0] + "\n" + chosen[1] + "\n")
+    handle.write(chosen[0] + "\n" + chosen[1] + "\n" + chosen[2] + "\n")
 PY
 
 name=$(sed -n '1p' "$target")
 branch=$(sed -n '2p' "$target")
+account_id=$(sed -n '3p' "$target")
 test -n "$name"
 test -n "$branch"
-echo "Deploying to Pages project: $name (branch $branch)"
+test -n "$account_id"
+export CLOUDFLARE_ACCOUNT_ID="$account_id"
+echo "Deploying to Pages project: $name (account $account_id, branch $branch)"
 npx --yes wrangler@3 pages deploy dist --project-name="$name" --branch="$branch" --commit-dirty=true
