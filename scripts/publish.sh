@@ -7,9 +7,19 @@ test -d dist
 : "${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN is required}"
 : "${CLOUDFLARE_ACCOUNT_ID:?CLOUDFLARE_ACCOUNT_ID is required}"
 
-projects=$(curl -fsS \
+body=$(mktemp)
+code=$(curl -sS -o "$body" -w "%{http_code}" \
   -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-  "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects?per_page=100")
+  "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects")
+
+if [ "$code" != "200" ]; then
+  echo "Cloudflare project list returned HTTP $code" >&2
+  python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d.get("errors") or d.get("message") or "no error body")' "$body" >&2
+  rm -f "$body"
+  exit 1
+fi
+projects=$(cat "$body")
+rm -f "$body"
 
 name=$(printf '%s' "$projects" | python3 -c '
 import json, sys
