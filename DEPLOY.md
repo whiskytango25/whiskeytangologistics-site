@@ -20,3 +20,9 @@ Repo: `whiskytango25/whiskeytangologistics-site`
 Connect that repo to the existing Pages project, production branch `main`. Future edits ship on push.
 
 Do not upload `site/landing/` alone again. That is how legal went missing.
+
+## What changed 2026-10-01
+
+- `/` was 404 in production because the last upload did not include `index.html`. Upload this whole folder, not `legal/` alone.
+- Header on the home page links to `/legal`.
+- Contact is a form (name, email, phone, topic, message) on the home page and on `/legal`. First send asks FormSubmit to confirm `info@whiskeytangologistics.com`.
